@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Transkriptorius</title>
+<meta name="description" content="Kalbos transkribavimas ir vertimas realiu laiku">
+<meta name="theme-color" content="#1f4e79">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <img src="icons/icon-192.png" alt="" width="30" height="30">
+    <span>Transkriptorius</span>
+  </div>
+  <div class="top-actions">
+    <button id="installBtn" class="primary small" hidden>Įdiegti<span class="desk"> programą</span></button>
+    <button id="helpBtn" class="ghost small icon-btn" aria-label="Pagalba"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26A2 2 0 1 0 10 9H8a4 4 0 1 1 7.07 2.25z"/></svg><span class="lbl">Pagalba</span></button>
+    <button id="settingsBtn" class="ghost small icon-btn" aria-label="Nustatymai"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.4 2.9a7.4 7.4 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5-2.2-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg><span class="lbl">Nustatymai</span></button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="choice" id="sourceRow" role="radiogroup" aria-label="Ką užrašysite">
+      <button type="button" class="card-btn src-btn" data-source="mic" role="radio">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        <span><strong>Pokalbis šalia</strong><small>kalba kambaryje, per mikrofoną</small></span>
+      </button>
+      <button type="button" class="card-btn src-btn" data-source="meeting" role="radio">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-7v2h3v2H7v-2h3v-2H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 2v9h16V6H4z"/></svg>
+        <span><strong>Teams / Zoom pokalbis</strong><small>garsas iš kompiuterio</small></span>
+      </button>
+    </div>
+    <div class="pickers">
+      <label>Kokia kalba kalbama?
+        <select id="srcLang"></select>
+      </label>
+      <label>Versti į
+        <select id="dstLang"></select>
+      </label>
+    </div>
+
+    <div class="mode" role="radiogroup" aria-label="Atpažinimo kokybė">
+      <button type="button" class="mode-btn" data-engine="browser" role="radio">
+        <strong>Nemokamas</strong><small>greitas, skyryba apytikslė</small>
+      </button>
+      <button type="button" class="mode-btn" data-engine="openai" role="radio">
+        <strong>Profesionalus</strong><small>tiksliausias, mokamas (OpenAI)</small>
+      </button>
+    </div>
+
+    <div class="mic-wrap">
+      <button id="recBtn" class="mic" aria-label="Pradėti įrašymą">
+        <svg viewBox="0 0 24 24" class="ic-mic" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        <svg viewBox="0 0 24 24" class="ic-stop" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+      <p id="status" class="status">Paspauskite mygtuką ir kalbėkite</p>
+      <p id="timer" class="timer">00:00</p>
+    </div>
+
+    <details id="audioPanel" class="audio">
+      <summary>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+        <span>Garso nustatymai</span><span id="audioSummary" class="muted"></span>
+      </summary>
+      <div class="audio-body">
+        <div id="audioControls" class="audio-grid">
+          <label>Mikrofonas
+            <select id="micId"><option value="">Numatytasis mikrofonas</option></select>
+          </label>
+          <label>Garsumas: <strong id="sensLabel"></strong>
+            <input id="sensitivity" type="range" min="1" max="5" step="1">
+            <span class="range-ends"><span>tyliau</span><span>garsiau (tylus kalbėtojas)</span></span>
+          </label>
+          <div class="field">
+            <span class="field-label">Triukšmo filtras</span>
+            <div class="seg" id="noiseSeg" role="radiogroup">
+              <button type="button" data-n="0" role="radio">Išjungtas</button>
+              <button type="button" data-n="1" role="radio">Įprastas</button>
+              <button type="button" data-n="2" role="radio">Stiprus</button>
+            </div>
+            <span class="hint">Stiprus – triukšmingai salei. Jei tyliai kalbant žodžiai dingsta – rinkitės „Išjungtas“.</span>
+          </div>
+          <label class="check" id="includeMicRow"><input id="includeMic" type="checkbox"> Užrašyti ir mano balsą (mikrofoną)</label>
+        </div>
+        <div class="level" title="Garso lygis. Kalbant juosta turi peržengti raudoną brūkšnelį."><div id="levelBar"></div><span id="levelThr"></span></div>
+        <div class="test-row"><button type="button" id="testBtn" class="ghost small">Tikrinti garsą</button><span id="testInfo" class="hint"></span></div>
+        <p class="hint">Jei net didžiausias garsumas nepadeda – padidinkite mikrofono garsumą Windows nustatymuose (įvesties garsumas – 100). <a id="winSound" href="ms-settings:sound">Atidaryti Windows garso nustatymus</a></p>
+      </div>
+    </details>
+  </section>
+
+  <section class="panels">
+    <article class="panel">
+      <h2>Tekstas</h2>
+      <div id="transcript" class="text" aria-live="polite"></div>
+    </article>
+    <article class="panel" id="translationPanel">
+      <h2>Vertimas <span id="dstLabel" class="muted"></span></h2>
+      <div id="translation" class="text" aria-live="polite"></div>
+    </article>
+  </section>
+
+  <section class="actions">
+    <button id="copyBtn" class="ghost">Kopijuoti</button>
+    <button id="docBtn" class="ghost"><span class="desk">Atsisiųsti </span>Word</button>
+    <button id="shareBtn" class="ghost" hidden>Siųsti</button>
+    <button id="polishBtn" class="ghost desk" title="Sudeda skyrybos ženklus ir ištaiso atpažinimo klaidas (OpenAI)">Sutvarkyti skyrybą</button>
+    <button id="origBtn" class="ghost" hidden>Rodyti originalą</button>
+    <details class="more">
+      <summary>Daugiau</summary>
+      <div>
+        <button id="polishBtn2" class="ghost mob">Sutvarkyti skyrybą</button>
+        <button id="txtBtn" class="ghost">Atsisiųsti TXT</button>
+        <button id="srtBtn" class="ghost">Atsisiųsti SRT (subtitrai)</button>
+        <button id="clearBtn" class="ghost danger">Išvalyti tekstą</button>
+      </div>
+    </details>
+  </section>
+  <p id="toast" class="toast" role="status"></p>
+</main>
+
+<!-- Pirmo paleidimo langas -->
+<dialog id="welcome">
+  <div class="dlg">
+    <h2>Sveiki! Naudotis paprasta</h2>
+    <ol class="steps">
+      <li><span class="num">1</span><div><strong>Pasirinkite, ką užrašysite</strong> – pokalbį šalia ar Teams / Zoom pokalbį, ir <strong>kalbą</strong>. Jei reikia vertimo – kalbą, į kurią versti.</div></li>
+      <li><span class="num">2</span><div><strong>Paspauskite didelį apvalų mygtuką.</strong> Naršyklė paklaus, ar leisti naudoti mikrofoną – spauskite <em>„Leisti“</em>.</div></li>
+      <li><span class="num">3</span><div><strong>Kalbėkite.</strong> Tekstas atsiras ekrane, sakiniai bus jungiami į pastraipas.</div></li>
+      <li><span class="num">4</span><div><strong>Baigę paspauskite mygtuką dar kartą</strong> ir spauskite <em>„Atsisiųsti Word“</em>.</div></li>
+    </ol>
+    <p class="hint warn">Prieš įrašydami pokalbį, informuokite dalyvius ir gaukite jų sutikimą. Garsas apdorojamas interneto tarnybose („Google“ arba OpenAI).</p>
+    <div class="dialog-actions">
+      <button id="permBtn" class="ghost">Leisti mikrofoną dabar</button>
+      <button id="welcomeOk" class="primary">Supratau, pradėti</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Pagalba -->
+<dialog id="help">
+  <div class="dlg">
+    <h2>Pagalba</h2>
+    <details data-dev="windows"><summary>Kaip įdiegti kompiuteryje (Windows)</summary>
+      <ol>
+        <li>Atidarykite šią programą naršyklėje <strong>Chrome</strong> arba <strong>Edge</strong>.</li>
+        <li>Spauskite mėlyną mygtuką <strong>„Įdiegti programą“</strong> viršuje (arba adreso juostos dešinėje esančią piktogramą su rodykle).</li>
+        <li>Patvirtinkite <strong>„Įdiegti“</strong>. Darbalaukyje ir meniu „Pradėti“ atsiras piktograma „Transkriptorius“.</li>
+      </ol>
+    </details>
+    <details data-dev="android"><summary>Kaip įdiegti „Android“ telefone</summary>
+      <ol>
+        <li>Atidarykite programos nuorodą naršyklėje <strong>Chrome</strong>.</li>
+        <li>Spauskite <strong>trijų taškų meniu</strong> viršuje dešinėje.</li>
+        <li>Pasirinkite <strong>„Įdiegti programą“</strong> arba <strong>„Pridėti prie pradžios ekrano“</strong>.</li>
+      </ol>
+    </details>
+    <details data-dev="ios"><summary>Kaip įdiegti „iPhone“ / „iPad“</summary>
+      <ol>
+        <li>Atidarykite programos nuorodą naršyklėje <strong>Safari</strong>.</li>
+        <li>Apačioje spauskite <strong>„Bendrinti“</strong> (kvadratas su rodykle aukštyn).</li>
+        <li>Pasirinkite <strong>„Į pradžios ekraną“</strong> → <strong>„Pridėti“</strong>.</li>
+        <li>„iPhone“ rekomenduojamas <strong>„Profesionalus“</strong> režimas – nemokamas veikia nepatikimai.</li>
+      </ol>
+    </details>
+    <details><summary>Patarimai geresniam tekstui</summary>
+      <ul>
+        <li>Telefoną ar mikrofoną laikykite arti kalbančiojo, venkite foninio triukšmo.</li>
+        <li>Kalbėkite sakiniais, darykite trumpas pauzes – pagal jas dedami taškai ir pastraipos.</li>
+        <li>Nemokamas režimas skyrybą deda apytiksliai. Baigę įrašą, spauskite <strong>„Sutvarkyti skyrybą“</strong> (reikia OpenAI rakto, kaina – centai).</li>
+        <li>Įrašant neužrakinkite telefono ekrano – užrakinus mikrofonas išjungiamas.</li>
+      </ul>
+    </details>
+    <details data-dev="windows"><summary>Kaip užrašyti Teams / Zoom pokalbį</summary>
+      <ol>
+        <li>Paleiskite pokalbį „Teams“ ar „Zoom“ programoje kaip įprasta. Rekomenduojamos <strong>ausinės</strong> – kitaip mikrofonas antrą kartą „išgirs“ garsiakalbius.</li>
+        <li>Transkriptoriuje pasirinkite <strong>„Teams / Zoom pokalbis“</strong>.</li>
+        <li>Paspauskite apvalų mygtuką. Atsidarys langas „Ką bendrinti“.</li>
+        <li>Pasirinkite kortelę <strong>„Visas ekranas“</strong> (Entire screen), spustelėkite ekrano vaizdą.</li>
+        <li>Apačioje <strong>uždėkite varnelę „Bendrinti sistemos garsą“</strong> (Also share system audio) ir spauskite <strong>„Bendrinti“</strong>.</li>
+        <li>Ekranas nefilmuojamas ir niekur nesiunčiamas – programai reikia tik garso. Baigę spauskite apvalų mygtuką arba „Nebebendrinti“.</li>
+      </ol>
+      <p><strong>Svarbu:</strong> pokalbio pradžioje informuokite dalyvius, kad pokalbis transkribuojamas.</p>
+    </details>
+    <details><summary>Jei negirdi tylios kalbos</summary>
+      <p>Atidarykite „Garso nustatymai“ po apvaliu mygtuku → „Garsumas“ pastumkite į dešinę, „Triukšmo filtras“ – „Išjungtas“, paspauskite „Tikrinti garsą“ ir pakalbėkite: juosta turi peržengti raudoną brūkšnelį.</p>
+      <p>Jei to neužtenka (arba naudojate seną naršyklės versiją) – padidinkite mikrofono garsumą Windows:</p>
+      <ol>
+        <li>Spauskite <strong>Pradžia</strong> → <strong>Parametrai</strong> (Settings) → <strong>Sistema</strong> → <strong>Garsas</strong>.</li>
+        <li>Skiltyje <strong>Įvestis</strong> pasirinkite naudojamą mikrofoną.</li>
+        <li><strong>Įvesties garsumą</strong> nustatykite 100.</li>
+        <li>Jei to neužtenka: <strong>Daugiau garso parametrų</strong> → kortelė <strong>Įrašymas</strong> → mikrofonas → <strong>Ypatybės</strong> → <strong>Lygiai</strong> → <strong>Mikrofono stiprinimas</strong> +10 arba +20 dB. (Ne visi kompiuteriai šią parinktį turi.)</li>
+        <li>Chrome naršyklėje patikrinkite, kuris mikrofonas pasirinktas: adreso juostoje spynos piktograma → <strong>Svetainės nustatymai</strong> → <strong>Mikrofonas</strong>.</li>
+      </ol>
+      <p>Didžiausią skirtumą duoda <strong>atstumas</strong>: nešiojamojo kompiuterio mikrofonas gerai girdi iki 1–1,5 m. Posėdžiui verta įsigyti stalinį (konferencinį) USB mikrofoną.</p>
+    </details>
+    <details><summary>Jei neveikia mikrofonas</summary>
+      <ol>
+        <li>Adreso juostoje spauskite spynos piktogramą.</li>
+        <li>Prie „Mikrofonas“ pasirinkite <strong>„Leisti“</strong>.</li>
+        <li>Perkraukite puslapį.</li>
+      </ol>
+    </details>
+    <div class="dialog-actions"><button id="helpClose" class="primary">Uždaryti</button></div>
+  </div>
+</dialog>
+
+<!-- Nustatymai -->
+<dialog id="settings">
+  <form method="dialog" class="dlg">
+    <h2>Nustatymai</h2>
+
+    <fieldset>
+      <legend>Profesionalus režimas (OpenAI)</legend>
+      <label>API raktas
+        <input id="apiKey" type="password" autocomplete="off" placeholder="sk-...">
+      </label>
+      <p class="hint">Reikalingas tik profesionaliam režimui, OpenAI vertimui ir skyrybos tvarkymui. Saugomas tik šiame įrenginyje.</p>
+      <label>Terminų žodynas (neprivaloma)
+        <textarea id="glossary" rows="2" placeholder="LEADER, VVG, NMA, vietos plėtros strategija"></textarea>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Vertimas</legend>
+      <label>Vertimo tarnyba
+        <select id="trEngine">
+          <option value="mymemory">MyMemory (nemokama, ribotas kiekis per dieną)</option>
+          <option value="openai">OpenAI (kokybiškesnis, mokamas)</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Rodymas</legend>
+      <label class="check"><input id="autoPunct" type="checkbox"> Nemokamame režime automatiškai dėti taškus ir kablelius</label>
+      <label class="check"><input id="showTime" type="checkbox"> Rodyti laiko žymes</label>
+      <label class="check"><input id="keepAwake" type="checkbox"> Neleisti ekranui užgesti įrašant</label>
+    </fieldset>
+
+    <details class="adv">
+      <summary>Išplėstiniai nustatymai</summary>
+      <label>Atpažinimo modelis
+        <input id="sttModel" list="sttModels">
+        <datalist id="sttModels"><option value="gpt-4o-transcribe"><option value="gpt-4o-mini-transcribe"><option value="whisper-1"></datalist>
+      </label>
+      <label>Vertimo ir skyrybos modelis
+        <input id="trModel" list="trModels">
+        <datalist id="trModels"><option value="gpt-4o-mini"><option value="gpt-4o"><option value="gpt-4.1-mini"></datalist>
+      </label>
+    </details>
+
+    <div class="dialog-actions">
+      <button value="cancel" class="ghost">Atšaukti</button>
+      <button value="save" class="primary">Išsaugoti</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

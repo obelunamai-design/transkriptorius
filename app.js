@@ -727,12 +727,43 @@ let deferredPrompt = null;
 const localRun = location.hostname === 'localhost' || location.hostname === '127.0.0.1';  // paleista per darbalaukio piktogramą
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); if (localRun) return; deferredPrompt = e; $('installBtn').hidden = false; });
 window.addEventListener('appinstalled', () => { $('installBtn').hidden = true; toast('Programa įdiegta. Ją rasite darbalaukyje arba programų sąraše.'); });
+// Įdiegimo instrukcija pagal telefoną ir naršyklę
+const UA = navigator.userAgent;
+const INAPP = /FBAN|FBAV|FB_IAB|Instagram|Messenger|Line\/|GSA\/|Teams|Outlook|; wv\)/i.test(UA);
+function installSteps() {
+  if (INAPP) return { title: 'Atidarykite naršyklėje', warn: 'Nuoroda atidaryta kitos programėlės viduje (pvz., Messenger, Gmail, Teams). Iš čia įdiegti neįmanoma.',
+    steps: IS_IOS ? ['Paspauskite <b>Kopijuoti nuorodą</b> žemiau.', 'Atidarykite <b>Safari</b>.', 'Įklijuokite nuorodą į adreso juostą ir atidarykite.', 'Tada dar kartą paspauskite <b>Įdiegti</b>.']
+                  : ['Viršuje dešinėje paspauskite <b>⋮</b> (trys taškai).', 'Pasirinkite <b>Atidaryti naršyklėje</b> / <b>Open in Chrome</b>.', 'Tada dar kartą paspauskite <b>Įdiegti</b>.'] };
+  if (IS_IOS && /CriOS|FxiOS|EdgiOS/i.test(UA)) return { title: 'Įdiegimas iPhone', warn: 'iPhone programą patikimiausia įdiegti per Safari.',
+    steps: ['Paspauskite <b>Kopijuoti nuorodą</b> žemiau.', 'Atidarykite <b>Safari</b> ir įklijuokite nuorodą.', 'Apačioje paspauskite <b>Bendrinti</b> (kvadratas su rodykle aukštyn).', 'Slinkite žemyn ir pasirinkite <b>Į pradžios ekraną</b> (Add to Home Screen).', 'Paspauskite <b>Pridėti</b>.'] };
+  if (IS_IOS) return { title: 'Įdiegimas iPhone',
+    steps: ['Ekrano apačioje paspauskite <b>Bendrinti</b> (kvadratas su rodykle aukštyn). Jei apačioje mygtukų nematote – bakstelėkite ekrano apačią.', 'Slinkite žemyn ir pasirinkite <b>Į pradžios ekraną</b> (Add to Home Screen).', 'Paspauskite <b>Pridėti</b> viršuje dešinėje.', 'Programą atidarykite iš pradžios ekrano piktogramos <b>Transkriptorius</b>.'] };
+  if (/SamsungBrowser/i.test(UA)) return { title: 'Įdiegimas (Samsung naršyklė)',
+    steps: ['Apačioje paspauskite <b>≡</b> (meniu).', 'Pasirinkite <b>Pridėti puslapį prie</b> → <b>Pradžios ekranas</b>.', 'Patvirtinkite <b>Pridėti</b>.'] };
+  if (/Android/i.test(UA)) return { title: 'Įdiegimas Android',
+    steps: ['Viršuje dešinėje paspauskite <b>⋮</b> (trys taškai).', 'Pasirinkite <b>Įdiegti programą</b> arba <b>Pridėti prie pagrindinio ekrano</b>.', 'Patvirtinkite <b>Įdiegti</b>.', 'Piktograma <b>Transkriptorius</b> atsiras telefono ekrane.'] };
+  return { title: 'Įdiegimas kompiuteryje',
+    steps: ['Adreso juostos dešinėje paspauskite piktogramą su rodykle (Įdiegti) arba naršyklės meniu → <b>Įdiegti Transkriptorius</b>.', 'Patvirtinkite <b>Įdiegti</b>.'] };
+}
+function showInstallHelp() {
+  const i = installSteps();
+  $('instTitle').textContent = i.title;
+  $('instWarn').hidden = !i.warn; $('instWarn').textContent = i.warn || '';
+  $('instSteps').innerHTML = i.steps.map((t, n) => `<li><span class="num">${n + 1}</span><div>${t}</div></li>`).join('');
+  $('install').showModal();
+}
+$('instCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(location.href.split('#')[0]); $('instCopy').textContent = 'Nuoroda nukopijuota ✓'; }
+  catch { prompt('Nukopijuokite nuorodą:', location.href); }
+};
+$('instClose').onclick = () => $('install').close();
 $('installBtn').onclick = async () => {
-  if (!deferredPrompt) return $('helpBtn').click();
-  deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('installBtn').hidden = true;
+  if (!deferredPrompt) return showInstallHelp();
+  deferredPrompt.prompt(); const r = await deferredPrompt.userChoice; deferredPrompt = null;
+  if (r.outcome === 'accepted') $('installBtn').hidden = true;
 };
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-if (device === 'ios' && !standalone) $('installBtn').hidden = false;   // iPhone – rodomos instrukcijos
+if (IS_MOBILE && !standalone && !localRun) $('installBtn').hidden = false;   // telefone mygtukas rodomas visada
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ================= Paleidimas ================= */

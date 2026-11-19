@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '9 (2026-11-19)';
+const APP_VERSION = '10 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -405,13 +405,13 @@ function BrowserEngine() {
   const IOS_HELP = 'iPhone nemokamas atpažinimas nepasileido. Galimos priežastys: 1) išjungtas diktavimas – įjunkite: Nustatymai → Bendrieji → Klaviatūra → Įjungti diktavimą; 2) iPhone diktavimas nepalaiko pasirinktos kalbos. Patikimiausia iPhone – rinktis „Profesionalus“ režimą.';
   return {
     async start() {
-      if (IS_IOS) {
-        // iPhone neleidžia vienu metu mikrofono naudoti ir garso lygio juostai, ir atpažinimui – atidaromas tik atpažinimas
+      if (IS_MOBILE) {
+        // Telefonai neleidžia mikrofono naudoti dviem tikslais vienu metu – atidaromas tik atpažinimas (kaip pirmoje, veikusioje versijoje)
         if (cfg.source === 'meeting') throw new Error('Teams / Zoom pokalbio telefone užrašyti negalima.');
         setStatus('Klausausi… kalbėkite', 'live');
       } else {
-      // Naujose Chrome versijose (nuo ~133) atpažinimui perduodamas apdorotas garsas: veikia garsumas, filtras,
-      // mikrofono pasirinkimas ir Teams garsas. Senesnės naršyklės papildomą parametrą ignoruoja ir klauso numatytojo mikrofono.
+      // Kompiuteryje: mikrofonas atidaromas tik garso lygio juostai, o atpažinimas klauso pats (patikrintas būdas).
+      // Tik Teams / Zoom režime atpažinimui perduodamas pokalbio garsas.
       input = await buildInput();
       if (input.disp) input.disp.getAudioTracks()[0].addEventListener('ended', () => { if (running) { stop(); toast('Ekrano bendrinimas sustabdytas – įrašymas baigtas.'); } });
       live = input;
@@ -445,12 +445,14 @@ function BrowserEngine() {
         rec.onend = () => {
           if (interimText) { addText(interimText, { auto: true, speechAt: utterStart }); interimText = ''; utterStart = null; }
           // Jei atpažinimas vis iškart užsidaro ir nieko negirdi – nebandome be galo, o parodome priežastį
-          if (!gotResult && Date.now() - sessionStart < 1500) quickEnds++; else quickEnds = 0;
-          if (!stopped && quickEnds >= 4) { stopped = true; fail(IS_IOS ? IOS_HELP : 'Nemokamas atpažinimas nepasileidžia šioje naršyklėje. Pabandykite Chrome arba „Profesionalus“ režimą.'); return; }
+          if (!gotResult && Date.now() - sessionStart < 1000) quickEnds++; else quickEnds = 0;
+          if (!stopped && quickEnds >= 6) { stopped = true; fail(IS_IOS ? IOS_HELP : (input && input.disp) ? 'Nemokamas režimas šioje naršyklėje pokalbio garso neatpažįsta. Teams / Zoom pokalbiui rinkitės „Profesionalus“.' : 'Nemokamas atpažinimas nepasileidžia. Patikrinkite, ar naršyklei leistas mikrofonas, arba rinkitės „Profesionalus“ režimą.'); return; }
           if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, 300);
         };
-        if (IS_IOS) rec.start();
-        else { const track = input.stream.getAudioTracks()[0]; try { rec.start(track); } catch { rec.start(); } }
+        if (input && input.disp) {
+          try { rec.start(input.stream.getAudioTracks()[0]); }
+          catch (err) { stopped = true; fail('Nemokamas režimas šioje naršyklėje pokalbio garso nepriima. Teams / Zoom pokalbiui rinkitės „Profesionalus“.'); }
+        } else rec.start();
       };
       make();
     },

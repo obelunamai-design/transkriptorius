@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '11 (2026-11-19)';
+const APP_VERSION = '12 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -303,7 +303,8 @@ const sIdx = v => Math.min(4, Math.max(0, (Number(v ?? cfg.sensitivity) || 3) - 
 const speechThreshold = (floor = noiseFloor) => Math.max(SENS.min[sIdx()], floor * SENS.k[sIdx()]) * (cfg.noiseLevel === 2 ? 1.3 : 1);
 let curRms = 0, noiseFloor = 0.01, meter = null, live = null, testInput = null;
 const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const IS_MOBILE = IS_IOS || /Android/i.test(navigator.userAgent);
+const IS_ANDROID = /Android/i.test(navigator.userAgent);
+const IS_MOBILE = IS_IOS || IS_ANDROID;
 let sharedCtx = null;
 // Kviečiama iškart paspaudus mygtuką (iPhone kitaip garso apdorojimo nepaleidžia)
 function getCtx() {
@@ -421,14 +422,26 @@ function BrowserEngine() {
       const make = () => {
         sessionStart = Date.now(); gotResult = false;
         rec = new SR();
-        rec.lang = bcp47(el.srcLang.value); rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+        // Android „Chrome“ nepertraukiamame režime grąžina sukauptą tekstą (žodžiai kartojasi), todėl ten klausoma po vieną frazę
+        rec.lang = bcp47(el.srcLang.value); rec.continuous = !IS_ANDROID; rec.interimResults = true; rec.maxAlternatives = 1;
+        let sessionFinal = '';
         rec.onresult = e => {
           gotResult = true; quickEnds = 0;
           if (utterStart === null) utterStart = elapsed();
           let interim = '';
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
-            if (r.isFinal) { addText(r[0].transcript, { auto: true, speechAt: utterStart }); utterStart = elapsed(); }
+            if (r.isFinal) {
+              // Apsauga nuo pasikartojimų: jei naujas rezultatas prasideda ankstesniu, paimama tik nauja dalis
+              let t = r[0].transcript.trim();
+              const prev = sessionFinal.toLowerCase();
+              if (prev && t.toLowerCase().startsWith(prev)) t = t.slice(prev.length).trim();
+              sessionFinal = r[0].transcript.trim();
+              const last = segments.length ? segments[segments.length - 1] : null;
+              const lastPart = last && last.parts.length ? last.parts[last.parts.length - 1].text.trim().toLowerCase() : '';
+              if (t && t.toLowerCase() !== lastPart) addText(t, { auto: true, speechAt: utterStart });
+              utterStart = elapsed();
+            }
             else interim += r[0].transcript;
           }
           if (!interim) utterStart = null;
@@ -449,7 +462,7 @@ function BrowserEngine() {
           // Jei atpažinimas vis iškart užsidaro ir nieko negirdi – nebandome be galo, o parodome priežastį
           if (!gotResult && Date.now() - sessionStart < 1000) quickEnds++; else quickEnds = 0;
           if (!stopped && quickEnds >= 6) { stopped = true; fail((IS_IOS ? IOS_HELP : (input && input.disp) ? 'Nemokamas režimas šioje naršyklėje pokalbio garso neatpažįsta. Teams / Zoom pokalbiui rinkitės „Profesionalus“.' : 'Nemokamas atpažinimas nepasileidžia. Patikrinkite, ar naršyklei leistas mikrofonas, arba rinkitės „Profesionalus“ režimą.') + tech()); return; }
-          if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, 300);
+          if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, IS_ANDROID ? 50 : 300);
         };
         if (input && input.disp) {
           try { rec.start(input.stream.getAudioTracks()[0]); }

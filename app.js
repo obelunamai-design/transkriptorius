@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '10 (2026-11-19)';
+const APP_VERSION = '11 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -401,7 +401,8 @@ function stopMeter() {
 function BrowserEngine() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) throw new Error('Ši naršyklė nemokamo režimo nepalaiko. Atidarykite programą per Chrome arba Edge, arba rinkitės „Profesionalus“.');
-  let rec = null, stopped = false, input = null, utterStart = null, quickEnds = 0, sessionStart = 0, gotResult = false;
+  let rec = null, stopped = false, input = null, utterStart = null, quickEnds = 0, sessionStart = 0, gotResult = false, lastErr = 'nėra';
+  const tech = () => ` [Techninė info: klaida „${lastErr}“, kalba ${bcp47(el.srcLang.value)}, ${(navigator.userAgent.match(/(iPhone OS [\d_]+|Android [\d.]+|Windows NT [\d.]+)/) || [''])[0]}, ${(navigator.userAgent.match(/(CriOS|Chrome|Version|Edg|SamsungBrowser)\/[\d.]+/) || [''])[0]}]`;
   const IOS_HELP = 'iPhone nemokamas atpažinimas nepasileido. Galimos priežastys: 1) išjungtas diktavimas – įjunkite: Nustatymai → Bendrieji → Klaviatūra → Įjungti diktavimą; 2) iPhone diktavimas nepalaiko pasirinktos kalbos. Patikimiausia iPhone – rinktis „Profesionalus“ režimą.';
   return {
     async start() {
@@ -434,19 +435,20 @@ function BrowserEngine() {
           interimText = interim.trim(); render();
         };
         rec.onerror = e => {
+          lastErr = e.error || 'nežinoma';
           if (e.error === 'no-speech' || e.error === 'aborted') return;
-          if (e.error === 'service-not-allowed' && IS_IOS) { stopped = true; fail(IOS_HELP); return; }
+          if (e.error === 'service-not-allowed' && IS_IOS) { stopped = true; fail(IOS_HELP + tech()); return; }
           if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stopped = true; fail('Mikrofonas neleidžiamas. Žr. „Pagalba“ → „Jei neveikia mikrofonas“.'); return; }
           if (e.error === 'audio-capture') { stopped = true; fail('Mikrofonas nepasiekiamas – galbūt jį naudoja kita programa (pvz., skambutis). Uždarykite ją ir bandykite dar kartą.'); return; }
           if (e.error === 'network') { toast('Nutrūko ryšys su atpažinimo tarnyba, jungiamasi iš naujo…'); return; }
           if (e.error === 'language-not-supported') { stopped = true; fail(IS_IOS ? 'iPhone diktavimas nepalaiko pasirinktos kalbos. Rinkitės „Profesionalus“ režimą.' : 'Ši naršyklė nepalaiko pasirinktos kalbos. Naudokite Chrome arba „Profesionalus“ režimą.'); return; }
-          toast('Atpažinimo klaida: ' + e.error);
+          toast('Atpažinimo klaida: ' + e.error + tech());
         };
         rec.onend = () => {
           if (interimText) { addText(interimText, { auto: true, speechAt: utterStart }); interimText = ''; utterStart = null; }
           // Jei atpažinimas vis iškart užsidaro ir nieko negirdi – nebandome be galo, o parodome priežastį
           if (!gotResult && Date.now() - sessionStart < 1000) quickEnds++; else quickEnds = 0;
-          if (!stopped && quickEnds >= 6) { stopped = true; fail(IS_IOS ? IOS_HELP : (input && input.disp) ? 'Nemokamas režimas šioje naršyklėje pokalbio garso neatpažįsta. Teams / Zoom pokalbiui rinkitės „Profesionalus“.' : 'Nemokamas atpažinimas nepasileidžia. Patikrinkite, ar naršyklei leistas mikrofonas, arba rinkitės „Profesionalus“ režimą.'); return; }
+          if (!stopped && quickEnds >= 6) { stopped = true; fail((IS_IOS ? IOS_HELP : (input && input.disp) ? 'Nemokamas režimas šioje naršyklėje pokalbio garso neatpažįsta. Teams / Zoom pokalbiui rinkitės „Profesionalus“.' : 'Nemokamas atpažinimas nepasileidžia. Patikrinkite, ar naršyklei leistas mikrofonas, arba rinkitės „Profesionalus“ režimą.') + tech()); return; }
           if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, 300);
         };
         if (input && input.disp) {
@@ -649,7 +651,7 @@ function stop(silent) {
   if (!silent) setStatus(segments.length ? 'Sustabdyta. Tekstą galite atsisiųsti.' : 'Paspauskite mygtuką ir kalbėkite');
   setTimeout(() => { closePara(segments[segments.length - 1]); if (cfg.engine === 'browser') interimText = ''; render(); }, cfg.engine === 'openai' ? 0 : 400);
 }
-function fail(msg) { stop(true); setStatus('Nepavyko pradėti', 'error'); toast(msg, 12000); }
+function fail(msg) { stop(true); setStatus('Nepavyko pradėti', 'error'); toast(msg, 60000); }
 
 el.recBtn.onclick = () => running ? stop() : start();
 document.addEventListener('visibilitychange', async () => {
@@ -795,7 +797,8 @@ function showInstallHelp() {
   const i = installSteps();
   $('instTitle').textContent = i.title;
   $('instWarn').hidden = !i.warn; $('instWarn').textContent = i.warn || '';
-  $('instSteps').innerHTML = i.steps.map((t, n) => `<li><span class="num">${n + 1}</span><div>${t}</div></li>`).join('');
+  $('instSteps').innerHTML = i.steps.map((t, n) => `<li><span class="num">${n + 1}</span><div>${t}</div></li>`).join('') +
+    '<li><span class="num">i</span><div>Įdiegti <b>nebūtina</b> – programa visiškai veikia ir tiesiog naršyklėje. Telefonas neleidžia programai įsidiegti pačiai, todėl tai daroma per naršyklės meniu.</div></li>';
   $('install').showModal();
 }
 $('instCopy').onclick = async () => {

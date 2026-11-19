@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '13 (2026-11-19)';
+const APP_VERSION = '14 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -425,21 +425,20 @@ function BrowserEngine() {
         // Android „Chrome“ nepertraukiamame režime grąžina sukauptą tekstą (žodžiai kartojasi), todėl ten klausoma po vieną frazę
         rec.lang = bcp47(el.srcLang.value); rec.continuous = !IS_ANDROID; rec.interimResults = true; rec.maxAlternatives = 1;
         let sessionFinal = '';
-        const doneIdx = new Set();   // Android kartais iš naujo grąžina jau apdorotus rezultatus
+        const doneIdx = new Map();   // Android kartais iš naujo grąžina jau apdorotus rezultatus (indeksas -> jau užrašytas tekstas)
         rec.onresult = e => {
           gotResult = true; quickEnds = 0;
           if (utterStart === null) utterStart = elapsed();
           let interim = '';
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
-            if (r.isFinal && doneIdx.has(i)) continue;
             if (r.isFinal) {
-              doneIdx.add(i);
-              // Apsauga nuo pasikartojimų: jei naujas rezultatas prasideda ankstesniu, paimama tik nauja dalis
-              let t = r[0].transcript.trim();
-              const prev = sessionFinal.toLowerCase();
-              if (prev && t.toLowerCase().startsWith(prev)) t = t.slice(prev.length).trim();
-              sessionFinal = r[0].transcript.trim();
+              const full = r[0].transcript.trim();
+              // Apsauga nuo pasikartojimų: jei rezultatas kartoja jau užrašytą tekstą, paimama tik nauja dalis
+              const seen = doneIdx.has(i) ? doneIdx.get(i) : sessionFinal;
+              let t = full;
+              if (seen && full.toLowerCase().startsWith(seen.toLowerCase())) t = full.slice(seen.length).trim();
+              doneIdx.set(i, full); sessionFinal = full;
               const last = segments.length ? segments[segments.length - 1] : null;
               const lastPart = last && last.parts.length ? last.parts[last.parts.length - 1].text.trim().toLowerCase() : '';
               if (t && t.toLowerCase() !== lastPart) addText(t, { auto: true, speechAt: utterStart });

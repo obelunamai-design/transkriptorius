@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '12 (2026-11-19)';
+const APP_VERSION = '13 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -425,13 +425,16 @@ function BrowserEngine() {
         // Android „Chrome“ nepertraukiamame režime grąžina sukauptą tekstą (žodžiai kartojasi), todėl ten klausoma po vieną frazę
         rec.lang = bcp47(el.srcLang.value); rec.continuous = !IS_ANDROID; rec.interimResults = true; rec.maxAlternatives = 1;
         let sessionFinal = '';
+        const doneIdx = new Set();   // Android kartais iš naujo grąžina jau apdorotus rezultatus
         rec.onresult = e => {
           gotResult = true; quickEnds = 0;
           if (utterStart === null) utterStart = elapsed();
           let interim = '';
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
+            if (r.isFinal && doneIdx.has(i)) continue;
             if (r.isFinal) {
+              doneIdx.add(i);
               // Apsauga nuo pasikartojimų: jei naujas rezultatas prasideda ankstesniu, paimama tik nauja dalis
               let t = r[0].transcript.trim();
               const prev = sessionFinal.toLowerCase();
@@ -826,7 +829,19 @@ $('installBtn').onclick = async () => {
 };
 const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
 if (IS_MOBILE && !standalone && !localRun) $('installBtn').hidden = false;   // telefone mygtukas rodomas visada
-if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
+  // Atsiradus naujai versijai – programa persikrauna pati (bet ne įrašymo metu)
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    if (running) { toast('Yra nauja programos versija – ji įsijungs sustabdžius įrašymą ir perkrovus.'); return; }
+    reloading = true; location.reload();
+  });
+}
 
 /* ================= Paleidimas ================= */
 segments = segments.filter(s => Array.isArray(s.parts));

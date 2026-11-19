@@ -1,5 +1,28 @@
 'use strict';
 
+/* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
+window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
+window.addEventListener('unhandledrejection', e => showFatal(String(e.reason && e.reason.message || e.reason)));
+function showFatal(msg) {
+  let b = document.getElementById('fatal');
+  if (!b) {
+    b = document.createElement('div'); b.id = 'fatal';
+    b.style.cssText = 'position:fixed;left:8px;right:8px;top:8px;z-index:99;background:#b3261e;color:#fff;padding:12px 14px;border-radius:10px;font:14px/1.4 system-ui,sans-serif';
+    document.body.appendChild(b);
+  }
+  b.textContent = 'Programos klaida: ' + msg + '. Nufotografuokite šį pranešimą ir perduokite pagalbai. Naršyklė: ' + navigator.userAgent;
+}
+
+/* Langų (dialog) atsarginis variantas senesniems iPhone (iki iOS 15.4) */
+if (typeof HTMLDialogElement === 'undefined' || !HTMLDialogElement.prototype.showModal) {
+  document.querySelectorAll('dialog').forEach(d => {
+    d.showModal = () => { d.setAttribute('open', ''); d.classList.add('dlg-fallback'); };
+    d.close = v => { d.removeAttribute('open'); d.returnValue = v || ''; d.dispatchEvent(new Event('close')); };
+    d.querySelectorAll('button[value]').forEach(b => b.addEventListener('click', () => { d._v = b.value; }));
+    d.addEventListener('submit', ev => { ev.preventDefault(); d.close((ev.submitter && ev.submitter.value) || d._v || ''); });
+  });
+}
+
 /* ================= Kalbos ================= */
 const LANGS = [
   ['lt', 'lietuvių', 'lt-LT'], ['en', 'anglų', 'en-US'], ['de', 'vokiečių', 'de-DE'],
@@ -166,7 +189,7 @@ async function pumpTranslations() {
 }
 async function translateMyMemory(text, src, dst) {
   const parts = []; let cur = '';
-  for (const s of text.split(/(?<=[.!?…])\s+/)) {
+  for (const s of text.replace(/([.!?…])\s+/g, '$1\n').split('\n')) {   // be „lookbehind“ – veikia ir senesniuose iPhone
     if ((cur + ' ' + s).length > 400 && cur) { parts.push(cur); cur = s; } else cur = cur ? cur + ' ' + s : s;
   }
   if (cur) parts.push(cur);

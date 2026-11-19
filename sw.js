@@ -1,6 +1,6 @@
 // Programos apvalkalas saugomas talpykloje, kad programa greitai atsidarytų.
 // Užklausos į atpažinimo ir vertimo tarnybas visada eina į internetą.
-const CACHE = 'transkriptorius-v6';
+const CACHE = 'transkriptorius-v7';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

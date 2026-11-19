@@ -400,20 +400,28 @@ function stopMeter() {
 function BrowserEngine() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) throw new Error('Ši naršyklė nemokamo režimo nepalaiko. Atidarykite programą per Chrome arba Edge, arba rinkitės „Profesionalus“.');
-  let rec = null, stopped = false, input = null, utterStart = null;
+  let rec = null, stopped = false, input = null, utterStart = null, quickEnds = 0, sessionStart = 0, gotResult = false;
+  const IOS_HELP = 'iPhone nemokamas atpažinimas nepasileido. Galimos priežastys: 1) išjungtas diktavimas – įjunkite: Nustatymai → Bendrieji → Klaviatūra → Įjungti diktavimą; 2) iPhone diktavimas nepalaiko pasirinktos kalbos. Patikimiausia iPhone – rinktis „Profesionalus“ režimą.';
   return {
     async start() {
+      if (IS_IOS) {
+        // iPhone neleidžia vienu metu mikrofono naudoti ir garso lygio juostai, ir atpažinimui – atidaromas tik atpažinimas
+        if (cfg.source === 'meeting') throw new Error('Teams / Zoom pokalbio telefone užrašyti negalima.');
+        setStatus('Klausausi… kalbėkite', 'live');
+      } else {
       // Naujose Chrome versijose (nuo ~133) atpažinimui perduodamas apdorotas garsas: veikia garsumas, filtras,
       // mikrofono pasirinkimas ir Teams garsas. Senesnės naršyklės papildomą parametrą ignoruoja ir klauso numatytojo mikrofono.
       input = await buildInput();
-      const track = input.stream.getAudioTracks()[0];
       if (input.disp) input.disp.getAudioTracks()[0].addEventListener('ended', () => { if (running) { stop(); toast('Ekrano bendrinimas sustabdytas – įrašymas baigtas.'); } });
       live = input;
       startMeter(input);
+      }
       const make = () => {
+        sessionStart = Date.now(); gotResult = false;
         rec = new SR();
         rec.lang = bcp47(el.srcLang.value); rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
         rec.onresult = e => {
+          gotResult = true; quickEnds = 0;
           if (utterStart === null) utterStart = elapsed();
           let interim = '';
           for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -426,16 +434,22 @@ function BrowserEngine() {
         };
         rec.onerror = e => {
           if (e.error === 'no-speech' || e.error === 'aborted') return;
+          if (e.error === 'service-not-allowed' && IS_IOS) { stopped = true; fail(IOS_HELP); return; }
           if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { stopped = true; fail('Mikrofonas neleidžiamas. Žr. „Pagalba“ → „Jei neveikia mikrofonas“.'); return; }
+          if (e.error === 'audio-capture') { stopped = true; fail('Mikrofonas nepasiekiamas – galbūt jį naudoja kita programa (pvz., skambutis). Uždarykite ją ir bandykite dar kartą.'); return; }
           if (e.error === 'network') { toast('Nutrūko ryšys su atpažinimo tarnyba, jungiamasi iš naujo…'); return; }
-          if (e.error === 'language-not-supported') { stopped = true; fail('Ši naršyklė nepalaiko pasirinktos kalbos. Naudokite Chrome arba „Profesionalus“ režimą.'); return; }
+          if (e.error === 'language-not-supported') { stopped = true; fail(IS_IOS ? 'iPhone diktavimas nepalaiko pasirinktos kalbos. Rinkitės „Profesionalus“ režimą.' : 'Ši naršyklė nepalaiko pasirinktos kalbos. Naudokite Chrome arba „Profesionalus“ režimą.'); return; }
           toast('Atpažinimo klaida: ' + e.error);
         };
         rec.onend = () => {
           if (interimText) { addText(interimText, { auto: true, speechAt: utterStart }); interimText = ''; utterStart = null; }
-          if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch {} } }, 200);
+          // Jei atpažinimas vis iškart užsidaro ir nieko negirdi – nebandome be galo, o parodome priežastį
+          if (!gotResult && Date.now() - sessionStart < 1500) quickEnds++; else quickEnds = 0;
+          if (!stopped && quickEnds >= 4) { stopped = true; fail(IS_IOS ? IOS_HELP : 'Nemokamas atpažinimas nepasileidžia šioje naršyklėje. Pabandykite Chrome arba „Profesionalus“ režimą.'); return; }
+          if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, 300);
         };
-        try { rec.start(track); } catch { rec.start(); }
+        if (IS_IOS) rec.start();
+        else { const track = input.stream.getAudioTracks()[0]; try { rec.start(track); } catch { rec.start(); } }
       };
       make();
     },
@@ -601,6 +615,10 @@ $('testBtn').onclick = () => {
 
 async function start() {
   getCtx();
+  if (IS_IOS && cfg.engine === 'browser' && !store.get('iosWarned', false)) {
+    store.set('iosWarned', true);
+    toast('iPhone nemokamas režimas naudoja Apple diktavimą: jis turi būti įjungtas (Nustatymai → Bendrieji → Klaviatūra), o lietuvių kalba gali būti nepalaikoma. Jei tekstas neatsiras – rinkitės „Profesionalus“.', 15000);
+  }
   stopTest();
   try {
     engine = cfg.engine === 'openai' ? OpenAIEngine() : BrowserEngine();

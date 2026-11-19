@@ -1,5 +1,5 @@
 'use strict';
-const APP_VERSION = '14 (2026-11-19)';
+const APP_VERSION = '15 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -402,6 +402,7 @@ function stopMeter() {
 function BrowserEngine() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) throw new Error('Ši naršyklė nemokamo režimo nepalaiko. Atidarykite programą per Chrome arba Edge, arba rinkitės „Profesionalus“.');
+  let androidCommit = () => {};
   let rec = null, stopped = false, input = null, utterStart = null, quickEnds = 0, sessionStart = 0, gotResult = false, lastErr = 'nėra';
   const tech = () => ` [Techninė info: klaida „${lastErr}“, kalba ${bcp47(el.srcLang.value)}, ${(navigator.userAgent.match(/(iPhone OS [\d_]+|Android [\d.]+|Windows NT [\d.]+)/) || [''])[0]}, ${(navigator.userAgent.match(/(CriOS|Chrome|Version|Edg|SamsungBrowser)\/[\d.]+/) || [''])[0]}]`;
   const IOS_HELP = 'iPhone nemokamas atpažinimas nepasileido. Galimos priežastys: 1) išjungtas diktavimas – įjunkite: Nustatymai → Bendrieji → Klaviatūra → Įjungti diktavimą; 2) iPhone diktavimas nepalaiko pasirinktos kalbos. Patikimiausia iPhone – rinktis „Profesionalus“ režimą.';
@@ -422,10 +423,33 @@ function BrowserEngine() {
       const make = () => {
         sessionStart = Date.now(); gotResult = false;
         rec = new SR();
-        // Android „Chrome“ nepertraukiamame režime grąžina sukauptą tekstą (žodžiai kartojasi), todėl ten klausoma po vieną frazę
-        rec.lang = bcp47(el.srcLang.value); rec.continuous = !IS_ANDROID; rec.interimResults = true; rec.maxAlternatives = 1;
+        // Klausoma be pertraukų (kitaip „Android“ persijungimo metu praleidžia žodžius)
+        rec.lang = bcp47(el.srcLang.value); rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
         let sessionFinal = '';
         const doneIdx = new Map();   // Android kartais iš naujo grąžina jau apdorotus rezultatus (indeksas -> jau užrašytas tekstas)
+        if (IS_ANDROID) {
+          // „Android Chrome“ kiekvieną kartą grąžina VISĄ iki šiol pasakytą tekstą. Todėl laikomas vienas „juodraštis“:
+          // jis pakeičiamas naujesne versija, o į tekstą įrašoma tik nauja dalis (pagal jau įrašytų žodžių skaičių).
+          let chainHead = [], chainWords = 0, draft = '', draftAt = 0;
+          const commit = () => { if (draft) addText(draft, { auto: true, speechAt: draftAt }); draft = ''; interimText = ''; };
+          androidCommit = () => { commit(); chainHead = []; chainWords = 0; };
+          rec.onresult = e => {
+            gotResult = true; quickEnds = 0;
+            const lastR = e.results[e.results.length - 1];
+            const cur = ((lastR && lastR[0].transcript) || '').trim();
+            if (!cur) return;
+            const words = cur.split(/\s+/), lw = words.map(x => x.toLowerCase());
+            const n = Math.min(3, chainHead.length, lw.length);
+            const sameChain = n > 0 && chainHead.slice(0, n).join(' ') === lw.slice(0, n).join(' ');
+            if (!sameChain) { commit(); chainWords = 0; chainHead = lw.slice(0, 3); }
+            else if (chainHead.length < 3) chainHead = lw.slice(0, 3);
+            if (!draft) draftAt = elapsed();
+            draft = words.slice(chainWords).join(' ');
+            // ilgą kalbą įrašome dalimis, kad tekstas nebūtų tik pilkas juodraštis
+            if (lastR.isFinal && draft.split(/\s+/).length >= 20) { commit(); chainWords = words.length; }
+            interimText = draft; render();
+          };
+        } else
         rec.onresult = e => {
           gotResult = true; quickEnds = 0;
           if (utterStart === null) utterStart = elapsed();
@@ -460,11 +484,12 @@ function BrowserEngine() {
           toast('Atpažinimo klaida: ' + e.error + tech());
         };
         rec.onend = () => {
-          if (interimText) { addText(interimText, { auto: true, speechAt: utterStart }); interimText = ''; utterStart = null; }
+          if (IS_ANDROID) androidCommit();
+          else if (interimText) { addText(interimText, { auto: true, speechAt: utterStart }); interimText = ''; utterStart = null; }
           // Jei atpažinimas vis iškart užsidaro ir nieko negirdi – nebandome be galo, o parodome priežastį
           if (!gotResult && Date.now() - sessionStart < 1000) quickEnds++; else quickEnds = 0;
           if (!stopped && quickEnds >= 6) { stopped = true; fail((IS_IOS ? IOS_HELP : (input && input.disp) ? 'Nemokamas režimas šioje naršyklėje pokalbio garso neatpažįsta. Teams / Zoom pokalbiui rinkitės „Profesionalus“.' : 'Nemokamas atpažinimas nepasileidžia. Patikrinkite, ar naršyklei leistas mikrofonas, arba rinkitės „Profesionalus“ režimą.') + tech()); return; }
-          if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, IS_ANDROID ? 50 : 300);
+          if (!stopped) setTimeout(() => { if (!stopped) { try { make(); } catch (err) { stopped = true; fail('Atpažinimo nepavyko paleisti: ' + err.message); } } }, IS_ANDROID ? 0 : 300);
         };
         if (input && input.disp) {
           try { rec.start(input.stream.getAudioTracks()[0]); }

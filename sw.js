@@ -1,7 +1,7 @@
 // Transkriptorius: foninis darbuotojas.
 // Programos failai visada imami iš interneto (tikrinama, ar nėra naujesnės versijos),
 // o išsaugota kopija naudojama tik tada, kai interneto nėra.
-const CACHE = 'transkriptorius-v14';
+const CACHE = 'transkriptorius-v15';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', e => {

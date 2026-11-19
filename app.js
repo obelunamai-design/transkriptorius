@@ -1,4 +1,5 @@
 'use strict';
+const APP_VERSION = '9 (2026-11-19)';
 
 /* Jei kas nors nepavyksta (ypač senesniuose telefonuose) – rodoma aiški klaida ekrane */
 window.addEventListener('error', e => showFatal(e.message + (e.lineno ? ' (eil. ' + e.lineno + ')' : '')));
@@ -753,6 +754,8 @@ $('helpBtn').onclick = () => {
   $('help').showModal();
 };
 $('helpClose').onclick = () => $('help').close();
+$('verInfo').textContent = 'Programos versija: ' + APP_VERSION;
+$('verFoot').textContent = 'Versija ' + APP_VERSION;
 
 $('welcomeOk').onclick = () => { cfg.welcomed = true; store.set('welcomed', true); $('welcome').close(); };
 $('permBtn').onclick = async () => {

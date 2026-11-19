@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transkriptorius – atnaujinimas</title>
+<style>
+  body { margin: 0; font: 18px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f6f9; color: #1c2430; }
+  main { max-width: 520px; margin: 0 auto; padding: 32px 20px; }
+  .card { background: #fff; border: 1px solid #dde3ea; border-radius: 16px; padding: 22px; }
+  h1 { font-size: 22px; margin: 0 0 10px; }
+  button, a.btn { display: block; width: 100%; box-sizing: border-box; text-align: center; margin-top: 14px; padding: 14px; border-radius: 10px; font: inherit; text-decoration: none; border: 1px solid #1f4e79; }
+  .primary { background: #1f4e79; color: #fff; }
+  .ghost { background: #fff; color: #b3261e; border-color: #dde3ea; }
+  small { color: #667283; }
+</style>
+</head>
+<body>
+<main><div class="card">
+  <h1 id="t">Atnaujinama…</h1>
+  <p id="s">Šalinama sena programos versija iš telefono atminties.</p>
+  <a id="go" class="btn primary" href="./" hidden>Atidaryti programą</a>
+  <button id="all" class="ghost" hidden>Išvalyti viską (ir tekstus, ir raktą)</button>
+  <p><small>Šis puslapis tik išvalo seną versiją. Jūsų tekstai ir OpenAI raktas lieka, nebent paspausite „Išvalyti viską“.</small></p>
+</div></main>
+<script>
+(async function () {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const r of regs) await r.unregister();
+    }
+    if (window.caches) { const keys = await caches.keys(); for (const k of keys) await caches.delete(k); }
+    document.getElementById('t').textContent = 'Paruošta';
+    document.getElementById('s').textContent = 'Sena versija pašalinta. Programa atsidarys po kelių sekundžių.';
+  } catch (e) {
+    document.getElementById('t').textContent = 'Iš dalies pavyko';
+    document.getElementById('s').textContent = 'Klaida: ' + e.message + '. Paspauskite mygtuką žemiau.';
+  }
+  const go = document.getElementById('go');
+  go.href = './?v=' + Date.now(); go.hidden = false;
+  document.getElementById('all').hidden = false;
+  setTimeout(function () { location.replace(go.href); }, 2500);
+})();
+document.getElementById('all').onclick = function () {
+  if (!confirm('Bus ištrinti visi programos tekstai ir OpenAI raktas šiame telefone. Tęsti?')) return;
+  try { localStorage.clear(); } catch (e) {}
+  location.replace('./?v=' + Date.now());
+};
+</script>
+</body>
+</html>
